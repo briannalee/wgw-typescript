@@ -1,0 +1,17 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../wgw-node"
+		}
+	],
+	"settings": {
+		"cSpell.words": [
+			"axois",
+			"keyof",
+			"worldgen"
+		]
+	}
+}
