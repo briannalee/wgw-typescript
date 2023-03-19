@@ -9,8 +9,12 @@
 	],
 	"settings": {
 		"cSpell.words": [
+			"alea",
 			"axois",
+			"charset",
 			"keyof",
+			"param",
+			"ungzip",
 			"worldgen"
 		]
 	}
