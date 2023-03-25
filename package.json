@@ -1,7 +1,7 @@
 {
-  "name": "worldgen",
+  "name": "wgw-web",
   "version": "0.0.1",
-  "description": "",
+  "description": "wgw-web",
   "keywords": [
     "2D",
     "world generator",
@@ -10,26 +10,49 @@
   "license": "",
   "author": "",
   "scripts": {
-    "build": "webpack-dev-server --mode development --open",
+    "build": "webpack --mode=production --node-env=production",
     "prod_build": "webpack --mode production",
     "start:dev": "npx nodemon",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build:dev": "webpack --mode=development",
+    "build:prod": "webpack --mode=production --node-env=production",
+    "watch": "webpack --watch",
+    "serve": "webpack serve"
   },
   "devDependencies": {
     "@types/node": "^18.11.19",
     "@types/node-gzip": "^1.1.0",
     "@types/pako": "^2.0.0",
+    "@webpack-cli/generators": "^3.0.1",
+    "autoprefixer": "^10.4.14",
+    "css-loader": "^6.7.3",
+    "html-loader": "^4.2.0",
+    "html-webpack-plugin": "^5.5.0",
+    "mini-css-extract-plugin": "^2.7.5",
     "nodemon": "^2.0.20",
+    "postcss": "^8.4.21",
+    "postcss-flexbugs-fixes": "^5.0.2",
+    "postcss-loader": "^7.1.0",
+    "postcss-scss": "^4.0.6",
+    "prettier": "^2.8.6",
     "rimraf": "^4.1.2",
+    "style-loader": "^3.3.2",
+    "stylus": "^0.59.0",
+    "stylus-loader": "^7.1.0",
+    "template-ejs-loader": "^0.9.4",
     "ts-loader": "^9.4.2",
     "ts-node": "^10.9.1",
     "typescript": "^4.9.5",
-    "webpack": "^5.75.0",
-    "webpack-cli": "^5.0.1"
+    "webpack": "^5.76.3",
+    "webpack-cli": "^5.0.1",
+    "webpack-dev-server": "^4.13.0",
+    "workbox-webpack-plugin": "^6.5.4"
   },
   "dependencies": {
     "axios": "^1.2.3",
     "axois": "^0.0.1-security",
-    "pako": "^2.1.0"
+    "browserify-zlib": "^0.2.0",
+    "pako": "^2.1.0",
+    "typescript-plugin-css-modules": "^5.0.0"
   }
 }

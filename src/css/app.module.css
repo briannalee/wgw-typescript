@@ -1,0 +1,55 @@
+/* Application specific CSS */
+.overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 9;
+}
+
+.overlayButton {
+    position: absolute;
+    top: 2%;
+    right: 2%;
+    z-index: 10;
+    border: 0.5em solid darkgoldenrod;
+    background-color: palegoldenrod;
+    color: darkmagenta;
+    font-family: monospace;
+    font-size: 1.4em;
+    padding: 0.2em;
+}
+
+.overlayButton:hover {
+    background-color: goldenrod;
+}
+
+.overlayButton:active {
+    background-color: gold;
+}
+
+.ui {
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 10;
+}
+.app {
+    position: absolute;
+    top: 0;
+    left: 0;
+    
+}
+#main {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    margin: 0px;
+    padding: 0px;
+    overflow: hidden;
+}
+body,html {
+    width: 100%;
+    height: 100%;
+    padding: 0;
+    margin: 0;
+}

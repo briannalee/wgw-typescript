@@ -1,10 +1,9 @@
 import { App } from "./app";
-import { errorPink, cliff, steepCliff, highlands } from "./colors";
 import { Environment } from "./environment";
-import { heightColorMap } from "./heightColorMap";
 import { MapData, MapPoint } from "../../wgw-node/src/mapData";
-import { normalizeValue } from "./normalizeValue";
 import { RGBA } from "../../wgw-node/src/colors";
+import { Shape, Triangle } from "./shapes";
+import styles from "./css/app.module.css";
 
 export interface CanvasStage {
   element: HTMLCanvasElement;
@@ -33,17 +32,14 @@ export class WebEnvironment extends Environment {
    * @param contentAreaId String HTML DOM ID of the element which to append the canvas(s)
    * @param stages String array of class names that will be applied to the canvas element(s)
    */
-  public constructor(contentAreaId: string, stages?: string[]) {
-    // Sanitize inputs, check content area for validity
-    let contentArea: HTMLElement;
-    if (contentAreaId.length < 1) throw new Error("ID of HTML element to append to is empty " + contentAreaId);
-    if (!(contentArea = document.getElementById(contentAreaId)!)) {
-      throw new Error("Unable to find content area by ID: " + contentAreaId);
-    }
-    stages = stages ?? ["app"];
+  public constructor(contentAreaId: string, stages: string[]) {
+    let contentArea: HTMLElement = document.createElement("main");
+    contentArea.id = contentAreaId;
+    document.body.append(contentArea);
 
     // Get/Set the width & height of the content area
-    super(contentArea!.offsetWidth, contentArea!.offsetHeight);
+    super(contentArea.offsetWidth, contentArea.offsetHeight);
+    console.log(contentArea.offsetHeight);
 
     // Populate stage array, up to 12 stages
     this.stage = new Array(Math.min(stages.length,12));
@@ -95,17 +91,20 @@ export class WebEnvironment extends Environment {
   }
 
   drawMap(app: App): void {
-    this.drawMapLayer(app,this.stage[0].context);
+    this.drawMapLayers(app,this.stage[0].context,this.stage[1].context);
     this.drawUI(app,this.stage[2].context);
   }
 
-  private drawMapLayer(app: App, ctx: CanvasRenderingContext2D, mapX?: number, mapY?: number) {
+  private drawMapLayers(app: App, ctx: CanvasRenderingContext2D, ctxOverlay: CanvasRenderingContext2D, mapX?: number, mapY?: number) {
     mapX = mapX ?? 0;
     mapY = mapY ?? 0;
+
     const mapData: MapData = app.getMapData();
-    const drawWidth: number = Math.min(app.env.width,mapData.width);
-    const drawHeight: number = Math.min(app.env.height,mapData.height);
+    const drawWidth: number = app.env.width;
+    const drawHeight: number = app.env.height;
+
     var imageData = ctx.getImageData(0, 0, drawWidth, drawHeight);
+    var ctxImageData = ctxOverlay.getImageData(0, 0, drawWidth, drawHeight);
 
     for (var x = 0; x < drawWidth; x++) {
       for (var y = 0; y < drawHeight; y++) {
@@ -113,40 +112,48 @@ export class WebEnvironment extends Environment {
         const pixelDataIndex = (x + y * drawWidth) * 4;
 
         // mapPoint at this x,y
-        const mapPoint: MapPoint = mapData.mapPoints[mapX + x][mapY + y];
+        const scaleX = mapData.width/drawWidth;
+        const scaleY = mapData.height/drawHeight;
+        const scale = Math.max(Math.min(scaleX,scaleY),0.25);
+        const xIndex = Math.max(0,Math.min(Math.round(x*scale),mapData.width-1));
+        const yIndex = Math.max(0,Math.min(Math.round(y*scale),mapData.height-1));
+        let mapPoint: MapPoint;
 
-        // Normalized height value for this point
-        const heightNormalized = normalizeValue(mapPoint.height, mapData.minHeight, mapData.maxHeight);
 
-        // Map height to color via heightColorMap
-        const colorMap = heightColorMap.find((map) => heightNormalized >= map.heightRange[0] && heightNormalized < map.heightRange[1]);
-        let color: RGBA = colorMap ? colorMap.color : errorPink; // default to error color if no mapping found
-
-        // Sample steepness of surrounding tiles
-        let steepness: number = mapPoint.steepness ?? 0;
-
-        if (steepness >= 0.025 && !mapPoint.isWater) {
-          color = cliff;
-          if (steepness > 0.03)
-            color = steepCliff;
+        try {
+          mapPoint = mapData.mapPoints[xIndex][yIndex];
+        } catch (error) {
+          throw new Error("invalid index: " + xIndex + " | " + yIndex);
         }
 
-        //let tempColor = temperatureToColor(mapPoint.temperature!);
-        this.setColor(imageData, pixelDataIndex, color);
-        //this.setColor(overlayData, pixelDataIndex, tempColor);
+        this.setColor(imageData, pixelDataIndex, mapPoint.color);
+        this.setColor(ctxImageData,pixelDataIndex,mapPoint.overlayTemp);
       }
     }
     ctx.putImageData(imageData, 0, 0);
-    //this.stage[1].context.putImageData(overlayData, 0, 0);
+    ctxOverlay.putImageData(ctxImageData, 0, 0);
   }
 
   private drawUI(app: App, ctx: CanvasRenderingContext2D) {
     ctx.beginPath();
-    const startX = this.width - 125;
-    const startY = this.height - 100;
+    const startX = this.width - 50;
+    const startY = this.height - 75;
+    this.drawShape(ctx,Triangle,startX,startY);
+
+    let button: HTMLButtonElement = document.createElement('button') as HTMLButtonElement;
+    button.className=styles.overlayButton;
+    button.textContent="Overlay";
+    ctx.canvas.parentElement!.append(button);
+  }
+
+  private drawShape(ctx: CanvasRenderingContext2D, shape: Shape, startX: number, startY: number) {
+    ctx.beginPath();
+    ctx.fillStyle = `rbga(${shape.color[0],shape.color[1],shape.color[2],shape.color[3]})`;
     ctx.moveTo(startX, startY);
-    ctx.lineTo(startX+100, startY+75);
-    ctx.lineTo(+startX+100, startY+25);
+    for (let i = 0; i < shape.points.length; i++) {
+      const element = shape.points[i];
+      ctx.lineTo(startX+element.x,startY+element.y);
+    }
     ctx.fill();
   }
 

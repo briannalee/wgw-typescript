@@ -1,15 +1,15 @@
 import axios from "axios";
-import { inflate } from "pako";
 import { MapData } from "../../wgw-node/src/mapData";
 import { App } from "./app";
 import { WebEnvironment } from "./environmentWeb";
+import styles from "./css/app.module.css";
 
 let application: App;
 
 init();
 
 function init() {
-  application = new App(new WebEnvironment("main",["app","overlay","ui"]));
+  application = new App(new WebEnvironment(styles.main,[styles.app,styles.overlay,styles.ui]));
   loadApp();
 }
 
@@ -28,6 +28,7 @@ async function loadApp() {
   .catch(function (error) {
     console.log(error);
   });
+  
 }
 
 
