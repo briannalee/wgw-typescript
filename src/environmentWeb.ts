@@ -2,7 +2,7 @@ import { App } from "./app";
 import { Environment } from "./environment";
 import { MapData, MapPoint } from "../../wgw-node/src/mapData";
 import { RGBA } from "../../wgw-node/src/colors";
-import { Shape, Triangle } from "./shapes";
+import { DownTriangle, LeftTriangle, MagnifyingGlassMinus, MagnifyingGlassPlus, RightTriangle, Shape, UpTriangle } from "./shapes";
 import styles from "./css/app.module.css";
 
 export interface CanvasStage {
@@ -18,12 +18,41 @@ export interface mouseClick {
   y: number;
 }
 
+export interface uiElementBoundaries {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+}
 
+export interface uiElement {
+  uiElementBoundaries: uiElementBoundaries;
+  shape: Shape;
+  func: Function;
+}
+
+
+/**
+ * The speed at which the map moves when the mouse is at the edge of the screen
+ */
+const mapMoveSpeed = 10;
+
+const scaleFactor = 0.1;
 export class WebEnvironment extends Environment {
   /**
    * The canvas(s) to draw the app on
    */
   stage: CanvasStage[];
+
+  /**
+   * The hidden HTML canvas to store image data in
+   */
+  hiddenCanvas!: OffscreenCanvas;
+
+  /**
+   * UI elements
+   */
+  uiElements: uiElement[] = [];
 
   /**
    * Creates canvas elements
@@ -37,9 +66,9 @@ export class WebEnvironment extends Environment {
     contentArea.id = contentAreaId;
     document.body.append(contentArea);
 
+    
     // Get/Set the width & height of the content area
-    super(contentArea.offsetWidth, contentArea.offsetHeight);
-    console.log(contentArea.offsetHeight);
+    super(0,0,contentArea.offsetWidth, contentArea.offsetHeight);
 
     // Populate stage array, up to 12 stages
     this.stage = new Array(Math.min(stages.length,12));
@@ -91,66 +120,193 @@ export class WebEnvironment extends Environment {
   }
 
   drawMap(app: App): void {
-    this.drawMapLayers(app,this.stage[0].context,this.stage[1].context);
+
+  
+    this.setScale(app);
+
+    this.drawMapLayers(app);
+    this.drawMapBitmap(app,this.hiddenCanvas,this.stage[0].context);
     this.drawUI(app,this.stage[2].context);
   }
 
-  private drawMapLayers(app: App, ctx: CanvasRenderingContext2D, ctxOverlay: CanvasRenderingContext2D, mapX?: number, mapY?: number) {
-    mapX = mapX ?? 0;
-    mapY = mapY ?? 0;
-
+  private setScale(app: App, scale?: number) {
     const mapData: MapData = app.getMapData();
     const drawWidth: number = app.env.width;
     const drawHeight: number = app.env.height;
 
-    var imageData = ctx.getImageData(0, 0, drawWidth, drawHeight);
-    var ctxImageData = ctxOverlay.getImageData(0, 0, drawWidth, drawHeight);
+    if (scale === undefined) {
+      const scaleX = mapData.mapMetadata.width / drawWidth;
+      const scaleY = mapData.mapMetadata.height / drawHeight;
+      this.scale = Math.min(scaleX, scaleY);
+    }else{
+      const scaleX = this.hiddenCanvas.width / drawWidth;
+      const scaleY = this.hiddenCanvas.height / drawHeight;
+      this.scale = Math.min(scaleX, scaleY, scale);
+    }
+  }
 
-    for (var x = 0; x < drawWidth; x++) {
-      for (var y = 0; y < drawHeight; y++) {
+  /**
+   * Draws the view bitmap on the canvas.
+   */
+  private drawMapBitmap(app: App, canvas: OffscreenCanvas, ctx: CanvasRenderingContext2D) {
+    const sw = Math.min(app.env.width * this.scale,canvas.width);
+    const sh = Math.min(app.env.height * this.scale,canvas.height);
+    ctx.drawImage(canvas, app.env.mapX, app.env.mapY, sw, sh,0,0,app.env.width,app.env.height);
+  }
+
+
+
+  /**
+   * 
+   * @param app 
+   * @param ctx 
+   * @param ctxOverlay 
+   * @param mapX 
+   * @param mapY 
+   * @param scale 
+   */ 
+  private drawMapLayers(app: App) {
+    const mapData: MapData = app.getMapData();
+    const drawWidth: number = app.env.width;
+    const drawHeight: number = app.env.height;
+
+    // Make scratch canvas
+    let scratchScale = 2;
+    // HACK: This is a hack to get the hidden canvas to work with safari
+    this.hiddenCanvas = document.createElement("canvas") as unknown as OffscreenCanvas;
+    this.hiddenCanvas.width = mapData.mapMetadata.width * scratchScale;
+    this.hiddenCanvas.height = mapData.mapMetadata.height * scratchScale;
+    //this.hiddenCanvas.style.display = "none";
+    //document.body.append(this.hiddenCanvas);
+    let ctx: OffscreenCanvasRenderingContext2D = this.hiddenCanvas.getContext("2d") as unknown as OffscreenCanvasRenderingContext2D;
+
+    var imageData = ctx.getImageData(0, 0, mapData.mapMetadata.width * scratchScale, mapData.mapMetadata.height * scratchScale);
+    //var ctxImageData = ctxOverlay.getImageData(0, 0, drawWidth, drawHeight);
+
+
+
+    for (var x=0; x < mapData.mapMetadata.width*scratchScale; x++) {
+      for (var y=0; y < mapData.mapMetadata.height*scratchScale; y++) {
         // pixel data index tracker, 4 indices (RGBA) are used per pixel
-        const pixelDataIndex = (x + y * drawWidth) * 4;
+        const pixelDataIndex = (x + y * mapData.mapMetadata.width * scratchScale) * 4;
+
+        //const mapPointX = mapX+x;
+        //const mapPointY = mapY+y;
 
         // mapPoint at this x,y
-        const scaleX = mapData.width/drawWidth;
-        const scaleY = mapData.height/drawHeight;
-        const scale = Math.max(Math.min(scaleX,scaleY),0.25);
-        const xIndex = Math.max(0,Math.min(Math.round(x*scale),mapData.width-1));
-        const yIndex = Math.max(0,Math.min(Math.round(y*scale),mapData.height-1));
-        let mapPoint: MapPoint;
-
-
-        try {
-          mapPoint = mapData.mapPoints[xIndex][yIndex];
-        } catch (error) {
-          throw new Error("invalid index: " + xIndex + " | " + yIndex);
-        }
-
-        this.setColor(imageData, pixelDataIndex, mapPoint.color);
-        this.setColor(ctxImageData,pixelDataIndex,mapPoint.overlayTemp);
+        
+        const xIndex = Math.max(0,Math.min(Math.round(x/scratchScale),mapData.mapMetadata.width-1));
+        const yIndex = Math.max(0,Math.min(Math.round(y/scratchScale),mapData.mapMetadata.height-1));
+        //let mapPoint: MapPoint;
+        //mapPoint = mapData.mapPoints[xIndex][yIndex];
+        this.setColor(imageData, pixelDataIndex, mapData.mapPoints[xIndex][yIndex].color);
+        //this.setColor(ctxImageData,pixelDataIndex,mapPoint.overlayTemp);
       }
     }
     ctx.putImageData(imageData, 0, 0);
-    ctxOverlay.putImageData(ctxImageData, 0, 0);
+    
+    //ctxOverlay.putImageData(ctxImageData, 0, 0);
   }
 
   private drawUI(app: App, ctx: CanvasRenderingContext2D) {
-    ctx.beginPath();
-    const startX = this.width - 50;
-    const startY = this.height - 75;
-    this.drawShape(ctx,Triangle,startX,startY);
-
+    this.drawFourMapButtons(app, ctx, 5, 5);
+    this.drawMagnifyingGlass(app, ctx, app.env.width-50, 100);
     let button: HTMLButtonElement = document.createElement('button') as HTMLButtonElement;
     button.className=styles.overlayButton;
     button.textContent="Overlay";
+    button.addEventListener("click", this.toggleOverlay.bind(this));
     ctx.canvas.parentElement!.append(button);
   }
+
+  toggleOverlay() {
+    if (this.stage[1].element.classList.contains(styles.hidden)) {
+      this.stage[1].element.classList.remove(styles.hidden);
+    } else {
+      this.stage[1].element.classList.add(styles.hidden);
+    }
+  }
+
+
+  private drawFourMapButtons(app: App, ctx: CanvasRenderingContext2D, x: number, y: number) {
+    this.drawCanvasUIShape(ctx, app, 0+x, 25+y, LeftTriangle, this.moveMapButtonClicked.bind(this, app, 0));
+    this.drawCanvasUIShape(ctx, app, 75+x, 25+y, RightTriangle, this.moveMapButtonClicked.bind(this, app, 1));
+    this.drawCanvasUIShape(ctx, app, 25+x, 0+y, UpTriangle, this.moveMapButtonClicked.bind(this, app, 2));
+    this.drawCanvasUIShape(ctx, app, 25+x, 75+y, DownTriangle, this.moveMapButtonClicked.bind(this, app, 3));
+  }
+
+  private drawMagnifyingGlass(app: App, ctx: CanvasRenderingContext2D, x: number, y: number) {
+    this.drawCanvasUIShape(ctx, app, x, y, MagnifyingGlassPlus, this.zoomMapButtonClicked.bind(this, app,1));
+    this.drawCanvasUIShape(ctx, app, x, y+50, MagnifyingGlassMinus, this.zoomMapButtonClicked.bind(this, app,-1));
+  }
+
+  private zoomMapButtonClicked(app: App, direction: number) {
+    this.zoomMap(app, this.scale + direction * scaleFactor);
+  }
+
+  private zoomMap(app: App, zoom: number) {
+    //his.scale = zoom;
+    this.setScale(app,zoom);
+    //this.drawMapLayers(app,this.stage[0].context,this.stage[1].context);
+    this.drawMapBitmap(app,this.hiddenCanvas,this.stage[0].context);
+    console.log("Zoom: " + zoom);
+  }
+
+
+  private drawCanvasUIShape(ctx: CanvasRenderingContext2D, app: App, x: number, y: number, shape: Shape, func: Function) {
+    this.drawShape(ctx, shape, x, y);
+    this.uiElements.push({ uiElementBoundaries: { left: x, top: y, right: x + 50, bottom: y + 50 }, shape: shape, func: func });
+  }
+
+  moveMap(app: App, x: number, y: number): void {
+    
+    const start = performance.now();
+    //this.drawMapLayers(app,this.stage[0].context,this.stage[1].context,x,y);
+    app.env.mapX = x;
+    app.env.mapY = y;
+    this.drawMapBitmap(app,this.hiddenCanvas,this.stage[0].context);
+    const end = performance.now();
+    console.log("Time: " + (end-start));
+  }
+
+  disableOverlay(): void {
+    this.stage[1].element.style.display="none";
+  }
+
+  moveMapButtonClicked(app: App, direction: number) {
+    switch (direction) {
+      case 0:
+        if (app.env.mapX-mapMoveSpeed > 0) {
+          this.moveMap(app,app.env.mapX-mapMoveSpeed,app.env.mapY);
+        }
+        break;
+      case 1:
+        if ((app.env.mapX+mapMoveSpeed)+this.width < app.getMapData().mapMetadata.width/this.scale) {
+          this.moveMap(app,app.env.mapX+mapMoveSpeed,app.env.mapY);
+        }
+        break;
+      case 2:
+        if (app.env.mapY-mapMoveSpeed > 0) {
+          this.moveMap(app,app.env.mapX,app.env.mapY-mapMoveSpeed);
+        }
+        break;
+      case 3:
+        if ((app.env.mapY+mapMoveSpeed)+this.height < app.getMapData().mapMetadata.height/this.scale) { 
+          this.moveMap(app,app.env.mapX,app.env.mapY+mapMoveSpeed);
+         }
+        break;
+      default:
+        break;
+    }
+  }
+
+
 
   private drawShape(ctx: CanvasRenderingContext2D, shape: Shape, startX: number, startY: number) {
     ctx.beginPath();
     ctx.fillStyle = `rbga(${shape.color[0],shape.color[1],shape.color[2],shape.color[3]})`;
-    ctx.moveTo(startX, startY);
-    for (let i = 0; i < shape.points.length; i++) {
+
+    ctx.moveTo(startX+shape.points[0].x, startY+shape.points[0].y);
+    for (let i = 1; i < shape.points.length; i++) {
       const element = shape.points[i];
       ctx.lineTo(startX+element.x,startY+element.y);
     }
@@ -193,11 +349,22 @@ export class WebEnvironment extends Environment {
    */
   mouseClickEvent(e:MouseEvent) {
     let mousePos : mouseClick = this.getMousePosition(e);
-    
+    this.uiElements.forEach(element => {
+      if (mousePos.x >= element.uiElementBoundaries.left && mousePos.x <= element.uiElementBoundaries.right && mousePos.y >= element.uiElementBoundaries.top && mousePos.y <= element.uiElementBoundaries.bottom) {
+        element.func();
+      }
+    });
+
   }
 
-  drawLoadingScreen(app: App): void {
-  this.stage[0].context.font = "4em sans-serif";
-  this.stage[0].context.fillText("Loading...", this.width/3, this.height/3);
+  public drawLoadingScreen() {
+    let ctx = this.stage[0].context;
+    ctx.beginPath();
+    ctx.fillStyle = "black";
+    ctx.fillRect(0,0,this.width,this.height);
+    ctx.fillStyle = "white";
+    ctx.font = "30px Arial";
+    ctx.fillText("Loading...",this.width/2,this.height/2);
   }
+  
 }
