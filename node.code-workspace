@@ -18,17 +18,20 @@
 			"clearfix",
 			"codepaths",
 			"contenteditable",
+			"Conv",
 			"crlf",
 			"debounced",
 			"debouncing",
 			"devtool",
 			"Dirs",
+			"doctype",
 			"downlevel",
 			"dppx",
 			"enum",
 			"Enums",
 			"fallthrough",
 			"Fallthrough",
+			"favicon",
 			"fieldset",
 			"focusable",
 			"globals",
@@ -54,12 +57,10 @@
 			"tslib",
 			"ungzip",
 			"urlencoded",
+			"viewport",
 			"viewports",
 			"webkit",
-			"worldgen",
-			"doctype",
-			"favicon",
-			"viewport"
+			"worldgen"
 		]
 	}
 }

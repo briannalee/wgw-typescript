@@ -1,7 +1,7 @@
 import { App } from "./app";
 import { Environment } from "./environment";
 import { MapData, MapPoint } from "../../wgw-node/src/mapData";
-import { RGBA } from "../../wgw-node/src/colors";
+import { Colors, DecimalToRGB } from "../../wgw-node/src/colors";
 import { DownTriangle, LeftTriangle, MagnifyingGlassMinus, MagnifyingGlassPlus, RightTriangle, Shape, UpTriangle } from "./shapes";
 import styles from "./css/app.module.css";
 
@@ -31,18 +31,20 @@ export interface uiElement {
   func: Function;
 }
 
-
-/**
- * The speed at which the map moves when the mouse is at the edge of the screen
- */
-const mapMoveSpeed = 10;
-
-const scaleFactor = 0.1;
 export class WebEnvironment extends Environment {
   /**
    * The canvas(s) to draw the app on
    */
   stage: CanvasStage[];
+
+    /**
+   * The speed at which the map moves when the mouse is at the edge of the screen
+   */
+  mapMoveSpeed = 10;
+
+  zoomSpeed = 0.1;
+
+  qualityFactor = 2;
 
   /**
    * The hidden HTML canvas to store image data in
@@ -199,7 +201,7 @@ export class WebEnvironment extends Environment {
         const yIndex = Math.max(0,Math.min(Math.round(y/scratchScale),mapData.mapMetadata.height-1));
         //let mapPoint: MapPoint;
         //mapPoint = mapData.mapPoints[xIndex][yIndex];
-        this.setColor(imageData, pixelDataIndex, mapData.mapPoints[xIndex][yIndex].color);
+        this.setColor(imageData, pixelDataIndex, mapData.mapPoints[xIndex][yIndex].c!,1);
         //this.setColor(ctxImageData,pixelDataIndex,mapPoint.overlayTemp);
       }
     }
@@ -240,16 +242,50 @@ export class WebEnvironment extends Environment {
   }
 
   private zoomMapButtonClicked(app: App, direction: number) {
-    this.zoomMap(app, this.scale + direction * scaleFactor);
+    this.zoomMap(app, this.scale + direction * this.zoomSpeed);
   }
 
   private zoomMap(app: App, zoom: number) {
     //his.scale = zoom;
     this.setScale(app,zoom);
+
+
+    this.checkMapPosition(app);
+    
     //this.drawMapLayers(app,this.stage[0].context,this.stage[1].context);
     this.drawMapBitmap(app,this.hiddenCanvas,this.stage[0].context);
     console.log("Zoom: " + zoom);
   }
+
+  /**
+   * Method to check the map position and update as needed to ensure it is within the bounds of scratch canvas
+   * considering the size of the map, the current viewport scale (this.scale) and scratch canvas scale (this.qualityFactor)
+   */
+  private checkMapPosition(app: App) {
+    const mapData = app.getMapData();
+    const mapWidth = mapData.mapMetadata.width;
+    const mapHeight = mapData.mapMetadata.height;
+    const mapX = app.env.mapX;
+    const mapY = app.env.mapY;
+    const scale = this.scale;
+    const qualityFactor = this.qualityFactor;
+    const viewportWidth = app.env.width;
+    const viewportHeight = app.env.height;
+    const maxX = mapWidth*qualityFactor - (viewportWidth / scale);
+
+    if (mapX < 0) { 
+      app.env.mapX = 0;
+    } else if (mapX + (viewportWidth * scale) > mapWidth*qualityFactor) {
+      app.env.mapX = (mapWidth*qualityFactor) - (viewportWidth * scale);
+    }
+    if (mapY < 0) {
+      app.env.mapY = 0;
+    } else if (mapY + (viewportHeight * scale) > mapHeight*qualityFactor) {
+      app.env.mapY = (mapHeight*qualityFactor) - (viewportHeight * scale);
+    }
+  }
+
+
 
 
   private drawCanvasUIShape(ctx: CanvasRenderingContext2D, app: App, x: number, y: number, shape: Shape, func: Function) {
@@ -258,40 +294,37 @@ export class WebEnvironment extends Environment {
   }
 
   moveMap(app: App, x: number, y: number): void {
-    
-    const start = performance.now();
-    //this.drawMapLayers(app,this.stage[0].context,this.stage[1].context,x,y);
     app.env.mapX = x;
     app.env.mapY = y;
     this.drawMapBitmap(app,this.hiddenCanvas,this.stage[0].context);
-    const end = performance.now();
-    console.log("Time: " + (end-start));
   }
 
   disableOverlay(): void {
     this.stage[1].element.style.display="none";
   }
 
+
+
   moveMapButtonClicked(app: App, direction: number) {
     switch (direction) {
       case 0:
-        if (app.env.mapX-mapMoveSpeed > 0) {
-          this.moveMap(app,app.env.mapX-mapMoveSpeed,app.env.mapY);
+        if (app.env.mapX-this.mapMoveSpeed > 0) {
+          this.moveMap(app,app.env.mapX-this.mapMoveSpeed,app.env.mapY);
         }
         break;
       case 1:
-        if ((app.env.mapX+mapMoveSpeed)+this.width < app.getMapData().mapMetadata.width/this.scale) {
-          this.moveMap(app,app.env.mapX+mapMoveSpeed,app.env.mapY);
+        if ((app.env.mapX+this.mapMoveSpeed)+(this.width*this.scale) < (app.getMapData().mapMetadata.width*this.qualityFactor)) {
+          this.moveMap(app,app.env.mapX+this.mapMoveSpeed,app.env.mapY);
         }
         break;
       case 2:
-        if (app.env.mapY-mapMoveSpeed > 0) {
-          this.moveMap(app,app.env.mapX,app.env.mapY-mapMoveSpeed);
+        if (app.env.mapY-this.mapMoveSpeed > 0) {
+          this.moveMap(app,app.env.mapX,app.env.mapY-this.mapMoveSpeed);
         }
         break;
       case 3:
-        if ((app.env.mapY+mapMoveSpeed)+this.height < app.getMapData().mapMetadata.height/this.scale) { 
-          this.moveMap(app,app.env.mapX,app.env.mapY+mapMoveSpeed);
+        if ((app.env.mapY+this.mapMoveSpeed)+(this.height*this.scale) < (app.getMapData().mapMetadata.height*this.qualityFactor)) { 
+          this.moveMap(app,app.env.mapX,app.env.mapY+this.mapMoveSpeed);
          }
         break;
       default:
@@ -303,7 +336,7 @@ export class WebEnvironment extends Environment {
 
   private drawShape(ctx: CanvasRenderingContext2D, shape: Shape, startX: number, startY: number) {
     ctx.beginPath();
-    ctx.fillStyle = `rbga(${shape.color[0],shape.color[1],shape.color[2],shape.color[3]})`;
+    ctx.fillStyle = `${shape.color.toString(16)}`;
 
     ctx.moveTo(startX+shape.points[0].x, startY+shape.points[0].y);
     for (let i = 1; i < shape.points.length; i++) {
@@ -317,13 +350,15 @@ export class WebEnvironment extends Environment {
    * 
    * @param imageData The HTML Canvas Context ImageData to work with
    * @param index Starting index of the pixel data
-   * @param color RGBA color to apply to the pixel
+   * @param color Decimal color to apply to the pixel
+   * @param alpha Alpha value to apply to the pixel 0-1
    */
-  private setColor(imageData:ImageData, index:number, color:RGBA) {
-    imageData.data[index] = color[0];
-    imageData.data[index+1] = color[1];
-    imageData.data[index+2] = color[2];
-    imageData.data[index+3] = color[3];
+  private setColor(imageData:ImageData, index:number, color:number, alpha:number) {
+    let rgb = DecimalToRGB(Colors[color]);
+    imageData.data[index] = rgb[0];
+    imageData.data[index+1] = rgb[1];
+    imageData.data[index+2] = rgb[2];
+    imageData.data[index+3] = alpha*255;
   }
 
   /**
