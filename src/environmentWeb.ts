@@ -11,9 +11,9 @@ export interface CanvasStage {
 }
 
 /**
- * Interface to hold coordinates for a mouse click event
+ * Interface to hold coordinates
  */
-export interface mouseClick {
+export interface Vector2 {
   x: number;
   y: number;
 }
@@ -44,7 +44,21 @@ export class WebEnvironment extends Environment {
 
   zoomSpeed = 0.1;
 
-  qualityFactor = 2;
+  qualityFactor = 1;
+
+  /**
+   * Highlight Point
+   */
+  highlightPoint:Vector2 = {x:0,y:0};
+
+  /**
+   * Mouse position on the map
+   */
+  mousePosition: Vector2 = {x:0,y:0};
+
+  /**
+   * 
+   */
 
   /**
    * The hidden HTML canvas to store image data in
@@ -82,7 +96,11 @@ export class WebEnvironment extends Environment {
     // Input Handler
     let classAccessor = this;
     this.stage[this.stage.length-1].element.addEventListener("mouseup", function(e){
-      classAccessor.mouseClickEvent(e);
+      classAccessor.mouseClickEvent(e as MouseEvent);
+    });
+
+    this.stage[this.stage.length-1].element.addEventListener("mousemove", function(e){
+      classAccessor.updateMousePosition(e as MouseEvent);
     });
   }
 
@@ -156,58 +174,34 @@ export class WebEnvironment extends Environment {
     ctx.drawImage(canvas, app.env.mapX, app.env.mapY, sw, sh,0,0,app.env.width,app.env.height);
   }
 
-
-
   /**
-   * 
+   * Draws the map layers on the hidden canvas
    * @param app 
-   * @param ctx 
-   * @param ctxOverlay 
-   * @param mapX 
-   * @param mapY 
-   * @param scale 
    */ 
   private drawMapLayers(app: App) {
     const mapData: MapData = app.getMapData();
-    const drawWidth: number = app.env.width;
-    const drawHeight: number = app.env.height;
 
     // Make scratch canvas
-    let scratchScale = 2;
+    let scratchScale = this.qualityFactor;
     // HACK: This is a hack to get the hidden canvas to work with safari
     this.hiddenCanvas = document.createElement("canvas") as unknown as OffscreenCanvas;
     this.hiddenCanvas.width = mapData.mapMetadata.width * scratchScale;
     this.hiddenCanvas.height = mapData.mapMetadata.height * scratchScale;
-    //this.hiddenCanvas.style.display = "none";
-    //document.body.append(this.hiddenCanvas);
     let ctx: OffscreenCanvasRenderingContext2D = this.hiddenCanvas.getContext("2d") as unknown as OffscreenCanvasRenderingContext2D;
-
     var imageData = ctx.getImageData(0, 0, mapData.mapMetadata.width * scratchScale, mapData.mapMetadata.height * scratchScale);
-    //var ctxImageData = ctxOverlay.getImageData(0, 0, drawWidth, drawHeight);
-
-
 
     for (var x=0; x < mapData.mapMetadata.width*scratchScale; x++) {
       for (var y=0; y < mapData.mapMetadata.height*scratchScale; y++) {
         // pixel data index tracker, 4 indices (RGBA) are used per pixel
         const pixelDataIndex = (x + y * mapData.mapMetadata.width * scratchScale) * 4;
-
-        //const mapPointX = mapX+x;
-        //const mapPointY = mapY+y;
-
-        // mapPoint at this x,y
         
         const xIndex = Math.max(0,Math.min(Math.round(x/scratchScale),mapData.mapMetadata.width-1));
         const yIndex = Math.max(0,Math.min(Math.round(y/scratchScale),mapData.mapMetadata.height-1));
-        //let mapPoint: MapPoint;
-        //mapPoint = mapData.mapPoints[xIndex][yIndex];
+
         this.setColor(imageData, pixelDataIndex, mapData.mapPoints[xIndex][yIndex].c!,1);
-        //this.setColor(ctxImageData,pixelDataIndex,mapPoint.overlayTemp);
       }
     }
     ctx.putImageData(imageData, 0, 0);
-    
-    //ctxOverlay.putImageData(ctxImageData, 0, 0);
   }
 
   private drawUI(app: App, ctx: CanvasRenderingContext2D) {
@@ -218,7 +212,58 @@ export class WebEnvironment extends Environment {
     button.textContent="Overlay";
     button.addEventListener("click", this.toggleOverlay.bind(this));
     ctx.canvas.parentElement!.append(button);
+    const classAccessor = this;
+    window.requestAnimationFrame(this.drawUIAnimation.bind(this));
   }
+
+  /**
+   * Draws animation for the UI
+   * @param app
+   */
+  private drawUIAnimation() {
+    this.drawMapTileHighlight();
+    window.requestAnimationFrame(this.drawUIAnimation.bind(this));
+  }
+
+  /** 
+   * Draws square around currently highlighted map tile based on mouse position
+   * 
+   */
+  public drawMapTileHighlight() {
+
+    
+   
+    const ctx: CanvasRenderingContext2D = this.stage[2].context;
+    ctx.clearRect(this.highlightPoint.x-2,this.highlightPoint.y-2,4,4);
+    this.highlightPoint = this.getScreenCoordinates(this.mousePosition);
+    ctx.beginPath();
+    ctx.moveTo(this.highlightPoint.x-2, this.highlightPoint.y-2);
+    ctx.lineTo(this.highlightPoint.x +2, this.highlightPoint.y-2);
+    ctx.lineTo(this.highlightPoint.x +2, this.highlightPoint.y+2);
+    ctx.lineTo(this.highlightPoint.x, this.highlightPoint.y+2);
+    ctx.lineTo(this.highlightPoint.x-1, this.highlightPoint.y+2);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  /**
+   * MapPoint to screen coordinates
+   */
+  private getScreenCoordinates(mapPoint: Vector2): Vector2 {
+    return {
+      x: (mapPoint.x-this.mapX) / this.scale /this.qualityFactor,
+      y: (mapPoint.y-this.mapY) / this.scale /this.qualityFactor
+    };
+  }
+
+  
+  /**
+   * Updates the mouse map position variable on mouse move
+   */
+  private updateMousePosition(e: MouseEvent) {
+    this.mousePosition = this.getMapMousePosition(e);
+  }
+
 
   toggleOverlay() {
     if (this.stage[1].element.classList.contains(styles.hidden)) {
@@ -366,7 +411,7 @@ export class WebEnvironment extends Environment {
      * @param event - Mouse click event
      * @returns - Coordinates as mouseClick interface
      */
-  getMousePosition(event: MouseEvent) : mouseClick {
+  getMousePosition(event: MouseEvent) : Vector2 {
     let rect = this.stage[0].element.getBoundingClientRect(), // abs. size of element
     scaleX = this.stage[0].element.width / rect.width,    // relationship bitmap vs. element for x
     scaleY = this.stage[0].element.height / rect.height;  // relationship bitmap vs. element for y
@@ -378,12 +423,27 @@ export class WebEnvironment extends Environment {
   }
 
   /**
+   * Gets the mouse position relative to the map, considering the map's position on the canvas
+   * the scale of the viewport, and the quality factor of the map
+   */
+  getMapMousePosition(mousePos: Vector2) : Vector2 {
+    let mapX = ((this.mapX*this.qualityFactor) + (mousePos.x*this.scale));
+    let mapY = ((this.mapY*this.qualityFactor) + (mousePos.y*this.scale));
+    // Snap to map grid
+    mapX = Math.floor(mapX/this.qualityFactor)*this.qualityFactor;
+    mapY = Math.floor(mapY/this.qualityFactor)*this.qualityFactor;
+    return {x: mapX, y: mapY};
+  }
+
+
+  /**
    * Handles mouse clicks
    * 
    * @param e - Triggering event
    */
   mouseClickEvent(e:MouseEvent) {
-    let mousePos : mouseClick = this.getMousePosition(e);
+    let mousePos : Vector2 = this.getMousePosition(e);
+    console.log(this.getMapMousePosition(e));
     this.uiElements.forEach(element => {
       if (mousePos.x >= element.uiElementBoundaries.left && mousePos.x <= element.uiElementBoundaries.right && mousePos.y >= element.uiElementBoundaries.top && mousePos.y <= element.uiElementBoundaries.bottom) {
         element.func();

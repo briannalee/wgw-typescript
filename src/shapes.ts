@@ -20,13 +20,19 @@ export const DownTriangle: Shape = {
   color: RGBToDecimal(100,100,100),
 }
 
+export const Circle: Shape = {
+  points: [{x:25,y:25},{x:25,y:0},{x:25,y:50},{x:0,y:25},{x:50,y:25}],
+  color: RGBToDecimal(100,100,100),
+}
+
+
 export const MagnifyingGlassPlus: Shape = {
-  points: [{x:0,y:0},{x:25,y:25},{x:0,y:50},{x:25,y:25},{x:50,y:0},{x:25,y:25},{x:0,y:25},{x:25,y:25},{x:50,y:25}],
+  points: Circle.points,
   color: RGBToDecimal(100,100,100),
 }
 
 export const MagnifyingGlassMinus: Shape = {
-  points: [{x:0,y:0},{x:25,y:25},{x:0,y:50},{x:25,y:25},{x:50,y:0},{x:25,y:25},{x:50,y:50},{x:25,y:25},{x:25,y:50}],
+  points: Circle.points,
   color: RGBToDecimal(100,100,100),
 }
 
